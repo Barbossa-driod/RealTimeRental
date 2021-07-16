@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: realtimerental-connector
+
+cloud:
+  aws:
+    stack:
+      auto: false
+    region:
+      auto: false
+      static: ${REGION}
+
+safely:
+  pmsRateLimitPerMinute: 50
+  safelyRateLimitPerMinute: 400
+  api:
+    username: loaded-from-ssm
+    password: loaded-from-ssm
+  queue:
+    inbound:
+      name: loaded-from-ssm
+      visibility: loaded-from-ssm
+    outbound:
+      name: loaded-from-ssm
+
+real.rent:
+  api:
+    uri:
+      properties: https://realtimerental.com/api/Property/PropertyCRUD?Format=1
+      properties.by.id : https://realtimerental.com/api/Property/PropertyCRUD?Format=1&PropertyID=%s
+      reservations: https://realtimerental.com/api/Lease/LeaseCRUD?Format=1
+      token : https://realtimerental.com/api/token

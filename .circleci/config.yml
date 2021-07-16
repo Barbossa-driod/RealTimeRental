@@ -1,0 +1,312 @@
+version: 2.1
+
+orbs:
+  aws-cli: circleci/aws-cli@1.3.0
+
+parameters:
+  version:
+    description: App version to deploy manually
+    type: string
+    default: ""
+  skip_build:
+    description: Skip build to perform deployment only
+    type: boolean
+    default: false
+  skip_dev_deploy:
+    description: Skip deployment to development environment
+    type: boolean
+    default: false
+  skip_test_deploy:
+    description: Skip deployment to test environment
+    type: boolean
+    default: false
+  skip_prod_deploy:
+    description: Skip deployment to production environment
+    type: boolean
+    default: false
+
+jobs:
+  #################################
+  ############# Build #############
+  #################################
+
+  # Terraform
+  "Terraform Lint":
+    docker:
+      - image: hashicorp/terraform:0.13.5
+    parameters:
+      skip:
+        type: boolean
+        default: false
+    steps:
+      - when:
+          condition: <<parameters.skip>>
+          steps:
+            - run: echo "Skipped!"
+      - unless:
+          condition: <<parameters.skip>>
+          steps:
+            - checkout
+            - run:
+                working_directory: ~/project/src/terraform
+                name: lint
+                command: |
+                  terraform version
+                  terraform fmt -check -recursive
+
+  "Terraform Speculative Plan":
+    docker:
+      - image: mcr.microsoft.com/powershell:latest
+    parameters:
+      skip:
+        type: boolean
+        default: false
+    steps:
+      - when:
+          condition: <<parameters.skip>>
+          steps:
+            - run: echo "Skipped!"
+      - unless:
+          condition: <<parameters.skip>>
+          steps:
+            - checkout
+            - run:
+                name: speculative plan
+                command: |
+                  export TERRAFORM_CLOUD_ORGANIZATION=safely
+                  export TERRAFORM_CONTENT_DIRECTORY=src/terraform/src/
+
+                  pwsh -f .circleci/speculative_plan.ps1
+
+  # Connector
+  "Build and Test":
+    docker:
+      - image: cimg/openjdk:11.0
+    parameters:
+      skip:
+        type: boolean
+        default: false
+    steps:
+      - when:
+          condition: <<parameters.skip>>
+          steps:
+            - run: echo "Skipped!"
+      - unless:
+          condition: <<parameters.skip>>
+          steps:
+            - checkout
+            - run:
+                working_directory: ~/project
+                name: link jar exec
+                command: sudo ln -s /usr/local/jdk-${JAVA_VERSION}/bin/jar /usr/bin/jar
+
+            - aws-cli/setup:
+                profile-name: circleci-legacy
+                aws-access-key-id: AWS_ACCESS_KEY_ID_LEGACY
+                aws-secret-access-key: AWS_SECRET_ACCESS_KEY_LEGACY
+
+            # Get IP Address to whitelist
+            - run:
+                name: Get IP Address and add to security group
+                command: |
+                  public_ip_address=$(wget -qO- http://checkip.amazonaws.com)
+                  echo "This public ip address is $public_ip_address"
+                  aws ec2 authorize-security-group-ingress --region $AWS_DEFAULT_REGION --group-id $NEXUS_SECURITY_GROUP --ip-permissions "[{\"IpProtocol\": \"tcp\", \"FromPort\": 8081, \"ToPort\": 8081, \"IpRanges\": [{\"CidrIp\": \"${public_ip_address}/32\"}]}]" --profile circleci-legacy
+
+            - run:
+                name: Download dependencies and compile
+                command: ./mvnw -s .circleci.settings.xml clean install dependency:resolve-plugins dependency:go-offline
+
+            - run:
+                working_directory: ~/project
+                name: maven build
+                command: |
+                  ./mvnw -s .circleci.settings.xml package
+                  mkdir -p target/dependency
+                  cd target/dependency
+                  jar -xf ../*.jar
+            - persist_to_workspace:
+                root: ~/project
+                paths:
+                  - target
+
+            - run:
+                name: Clean up whitelist
+                command: |
+                  public_ip_address=$(wget -qO- http://checkip.amazonaws.com)
+                  echo "This public ip address is $public_ip_address"
+
+                  current_security_group=$(aws ec2 describe-security-groups --region $AWS_DEFAULT_REGION --group-id $NEXUS_SECURITY_GROUP --profile circleci-legacy)
+                  ip_count=$(echo ${current_security_group} | jq -r '.SecurityGroups[0].IpPermissions | length')
+
+                  if [ ${ip_count} > 0 ]; then
+                      for (( n=0; n < $ip_count; n++ ))
+                      do
+                      this_port=$(echo ${current_security_group} | jq -r ".SecurityGroups[0].IpPermissions[${n}].FromPort")
+                      cidr_count=$(echo ${current_security_group} | jq -r ".SecurityGroups[0].IpPermissions[${n}].IpRanges | length")
+
+                      for (( c=0; c < $cidr_count; c++ ))
+                      do
+                          this_cidr=$(echo ${current_security_group} | jq -r ".SecurityGroups[0].IpPermissions[${n}].IpRanges[${c}].CidrIp")
+                          if [[ "$this_cidr" == "$public_ip_address"* ]]
+                          then
+                            echo "Removing CIDR: $this_cidr from security group"
+                            aws ec2 revoke-security-group-ingress --region $AWS_DEFAULT_REGION --group-id $NEXUS_SECURITY_GROUP --protocol tcp --port ${this_port} --cidr ${this_cidr} --profile circleci-legacy
+                          else
+                            echo "Ignoring CIDR: $this_cidr"
+                          fi
+                      done
+                      done
+                  fi
+                when: always # always clean up the whitelist
+
+  "Docker Build and Push":
+    docker:
+      - image: cimg/base:2020.10
+    parameters:
+      skip:
+        type: boolean
+        default: false
+    steps:
+      - when:
+          condition: <<parameters.skip>>
+          steps:
+            - run: echo "Skipped!"
+      - unless:
+          condition: <<parameters.skip>>
+          steps:
+            - setup_remote_docker:
+                version: 19.03.13
+            - checkout
+            - attach_workspace:
+                at: ~/project
+            - aws-cli/setup:
+                profile-name: circleci
+            - run:
+                name: configure aws role
+                command: |
+                  aws configure set role_arn arn:aws:iam::160205188459:role/deploy_pipeline20201008143024320400000002 --profile circleci-ecr
+                  aws configure set source_profile circleci --profile circleci-ecr
+            - run:
+                name: docker build and push
+                command: |
+                  AWS_ECR_ACCOUNT_URL=160205188459.dkr.ecr.us-east-1.amazonaws.com
+                  DOCKER_IMAGE_TAG=$AWS_ECR_ACCOUNT_URL/realtimerental-connector:$CIRCLE_SHA1
+                  DOCKERFILE_PATH=~/project/Dockerfile
+                  DOCKER_ROOT_CONTEXT=~/project
+
+                  docker build -t $DOCKER_IMAGE_TAG -f $DOCKERFILE_PATH $DOCKER_ROOT_CONTEXT
+                  aws ecr get-login-password --region $AWS_DEFAULT_REGION --profile circleci-ecr | docker login --username AWS --password-stdin $AWS_ECR_ACCOUNT_URL
+                  docker push $DOCKER_IMAGE_TAG
+
+  #################################
+  ############# Deploy ############
+  #################################
+  "Deploy Connector":
+    docker:
+      - image: mcr.microsoft.com/powershell:latest
+    parameters:
+      skip:
+        type: boolean
+        default: false
+      version:
+        type: string
+      terraform_cloud_workspace:
+        type: string
+    steps:
+      - when:
+          condition: <<parameters.skip>>
+          steps:
+            - run: echo "Skipped!"
+      - unless:
+          condition: <<parameters.skip>>
+          steps:
+            - checkout
+            - run:
+                name: deploy
+                command: |
+                  VERSION=<<parameters.version>>
+                  export VERSION=${VERSION:-$CIRCLE_SHA1}
+                  export TERRAFORM_CLOUD_ORGANIZATION=safely
+                  export TERRAFORM_CLOUD_WORKSPACE=<<parameters.terraform_cloud_workspace>>
+                  export TERRAFORM_CONTENT_DIRECTORY=src/terraform/src/
+
+                  pwsh -f ~/project/.circleci/deploy_connector.ps1
+
+
+workflows:
+  version: 2
+  default:
+    jobs:
+      #################################
+      ############# Build #############
+      #################################
+
+      # Terraform
+      - "Terraform Lint":
+          skip: <<pipeline.parameters.skip_build>>
+      - "Terraform Speculative Plan":
+          requires:
+            - "Terraform Lint"
+              # filters:
+              # branches:
+            # ignore: master
+          skip: <<pipeline.parameters.skip_build>>
+
+      # Connector
+      - "Build and Test":
+          skip: <<pipeline.parameters.skip_build>>
+      - "Docker Build and Push":
+          requires:
+            - "Build and Test"
+              # filters:
+              # branches:
+            # only: master
+          skip: <<pipeline.parameters.skip_build>>
+
+      #################################
+      ############# Deploy ############
+      #################################
+
+      ## Deploy to development environment
+      # Terraform and Connector
+      - "Deploy Connector":
+          name: Deploy Connector (dev)
+          requires:
+            - "Terraform Lint"
+            - "Docker Build and Push"
+              # filters:
+              # branches:
+            # only: master
+          # Parameters
+          skip: <<pipeline.parameters.skip_dev_deploy>>
+          version: <<pipeline.parameters.version>>
+          terraform_cloud_workspace: realtimerental-connector-development-us-east-1
+
+      ## Deploy to test environment
+      # Terraform and Connector
+      - "Deploy Connector":
+          name: Deploy Connector (test)
+          requires:
+            - "Deploy Connector (dev)"
+              # filters:
+              # branches:
+            # only: master
+          # Parameters
+          skip: <<pipeline.parameters.skip_test_deploy>>
+          version: <<pipeline.parameters.version>>
+          terraform_cloud_workspace: realtimerental-connector-test-us-east-1
+
+      ## Deploy to production environment
+      # Terraform and Connector
+      - "Deploy Connector":
+          name: Deploy Connector (prod)
+          requires:
+            - "Deploy Connector (test)"
+              # filters:
+              # branches:
+            # only: master
+          # Parameters
+          skip: <<pipeline.parameters.skip_prod_deploy>>
+          version: <<pipeline.parameters.version>>
+          terraform_cloud_workspace: realtimerental-connector-production-us-east-1

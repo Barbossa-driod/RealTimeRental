@@ -1,0 +1,5 @@
+spring:
+  profiles: test
+
+safely:
+  baseUrl: https://test.api.safely.ai/

@@ -1,0 +1,11 @@
+spring:
+  profiles: local
+
+cloud:
+  aws:
+    region:
+      auto: false
+      static: us-east-1
+
+safely:
+  baseUrl: http://localhost:8080/

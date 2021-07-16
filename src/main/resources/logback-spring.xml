@@ -1,0 +1,47 @@
+<configuration>
+    <property name="logPattern" value="%d %-5level %logger{35} - %msg%n"/>
+    <property name="logEncoding" value="UTF-8"/>
+
+    <springProfile name="prod">
+        <property name="logDirectory" value="/var/log/connector/realtimerental/prod"/>
+    </springProfile>
+    <springProfile name="test">
+        <property name="logDirectory" value="/var/log/connector/realtimerental/test"/>
+    </springProfile>
+    <springProfile name="dev">
+        <property name="logDirectory" value="/var/log/connector/realtimerental/dev"/>
+    </springProfile>
+    <springProfile name="local">
+        <property name="logDirectory" value="/tmp/realtimerental/local"/>
+    </springProfile>
+
+    <appender name="fileAppender" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${logDirectory}/realtimerental.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${logDirectory}/realtimerental_%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>30MB</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+        </rollingPolicy>
+        <encoder>
+            <charset>${logEncoding}</charset>
+            <pattern>${logPattern}</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <layout class="ch.qos.logback.classic.PatternLayout">
+            <Pattern>
+                ${logPattern}
+            </Pattern>
+        </layout>
+    </appender>
+
+
+    <logger name="org.springframework" level="warn"/>
+
+    <root level="INFO">
+        <appender-ref ref="fileAppender"/>
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

@@ -1,0 +1,38 @@
+[
+    {
+        "name": ${name},
+        "image": ${image},
+        "essential": true,
+        "portMappings": [
+            {
+                "containerPort": 8080
+            }
+        ],
+        "environment": [
+            {
+                "name": "VERSION",
+                "value": ${version}
+            },
+            {
+                "name": "SSM_PREFIX",
+                "value": ${ssm_prefix}
+            },
+            {
+                "name": "REGION",
+                "value": ${region}
+            },
+            {
+                "name": "SPRING_PROFILES_ACTIVE",
+                "value": ${spring_profiles_active}
+            }
+        ],
+        "logConfiguration": {
+            "logDriver": "awslogs",
+            "options": {
+                "awslogs-group": ${cloudwatch_log_group_name},
+                "awslogs-region": ${region},
+                "awslogs-stream-prefix": ${name}
+            }
+        }
+    }
+]

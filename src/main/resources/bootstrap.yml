@@ -1,0 +1,8 @@
+spring:
+  application:
+    name: realtimerental-connector
+
+aws:
+  paramstore:
+    prefix: ${SSM_PREFIX}
+    enabled: true

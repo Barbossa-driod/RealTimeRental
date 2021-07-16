@@ -1,0 +1,24 @@
+output "ecs_task_execution_role_name" {
+  value = aws_iam_role.ecs_task_execution_role.name
+}
+
+output "ecs_task_execution_role_arn" {
+  value = aws_iam_role.ecs_task_execution_role.arn
+}
+
+output "ecs_task_role_name" {
+  value = aws_iam_role.ecs_task_role.name
+}
+
+output "ecs_task_role_arn" {
+  value = aws_iam_role.ecs_task_role.arn
+}
+
+# Deployment Pipeline
+output "ecs_service_deployment_role_name" {
+  value = aws_iam_role.ecs_deployment_role.name
+}
+
+output "ecs_service_deployment_role_arn" {
+  value = aws_iam_role.ecs_deployment_role.arn
+}
