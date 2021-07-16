@@ -115,7 +115,9 @@ jobs:
 
             - run:
                 name: Download dependencies and compile
-                command: ./mvnw -s .circleci.settings.xml clean install dependency:resolve-plugins dependency:go-offline
+                command: |
+                  sudo chmod +x ./mvnw
+                  ./mvnw -s .circleci.settings.xml clean install dependency:resolve-plugins dependency:go-offline
 
             - run:
                 working_directory: ~/project
