@@ -73,7 +73,7 @@ module "ssm" {
   ssm_prefix = local.workspace_prefix
 
   safely_api_username      = "safelyconnector"
-  safely_api_password      = "9fRkUf3z}cGw"
+  safely_api_password      = "th1s1s4u"
   inbound_queue_url        = module.sqs.inbound_queue_url
   outbound_queue_url       = local.legacy_sync_queue_name
   inbound_queue_visibility = var.inbound_queue_visibility_timeout_seconds
