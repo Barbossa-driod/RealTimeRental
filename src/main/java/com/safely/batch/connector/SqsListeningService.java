@@ -8,6 +8,7 @@ import com.safely.batch.connector.components.common.ComputePropertiesChangeListS
 import com.safely.batch.connector.components.common.ComputeReservationsChangeListService;
 import com.safely.batch.connector.components.common.ConvertPmsPropertiesToSafelyService;
 import com.safely.batch.connector.components.common.ConvertPmsReservationsToSafelyService;
+import com.safely.batch.connector.components.external.LoadPmsAuthTokenService;
 import com.safely.batch.connector.components.internal.LoadOrganizationService;
 import com.safely.batch.connector.components.external.LoadPmsPropertiesService;
 import com.safely.batch.connector.components.external.LoadPmsReservationsService;
@@ -22,6 +23,7 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.aws.messaging.listener.Acknowledgment;
 import org.springframework.cloud.aws.messaging.listener.SqsMessageDeletionPolicy;
@@ -34,6 +36,7 @@ import org.springframework.stereotype.Service;
 public class SqsListeningService {
 
     private static final Logger log = LoggerFactory.getLogger(SqsListeningService.class);
+    private final LoadPmsAuthTokenService loadPmsAuthTokenService;
     private final LoadSafelyAuthService loadSafelyAuthService;
     private final LoadOrganizationService loadOrganizationService;
     private final LoadPmsPropertiesService loadPmsPropertiesService;
@@ -73,7 +76,8 @@ public class SqsListeningService {
                                SavePropertiesToSafelyService savePropertiesToSafelyService,
                                SaveReservationsToSafelyService saveReservationsToSafelyService,
                                SaveCompletionEventToSafelyService saveCompletionEventToSafelyService,
-                               ObjectMapper objectMapper, AmazonSQSAsync amazonSqsAsync, ScheduledTasks scheduledTasks) {
+                               ObjectMapper objectMapper, AmazonSQSAsync amazonSqsAsync, ScheduledTasks scheduledTasks,
+                               LoadPmsAuthTokenService loadPmsAuthTokenService) {
         this.loadSafelyAuthService = loadSafelyAuthService;
         this.loadOrganizationService = loadOrganizationService;
         this.loadPmsPropertiesService = loadPmsPropertiesService;
@@ -90,6 +94,7 @@ public class SqsListeningService {
         this.objectMapper = objectMapper;
         this.amazonSqsAsync = amazonSqsAsync;
         this.scheduledTasks = scheduledTasks;
+        this.loadPmsAuthTokenService = loadPmsAuthTokenService;
     }
 
     @SqsListener(value = "${safely.queue.inbound.name}", deletionPolicy = SqsMessageDeletionPolicy.NEVER)
@@ -97,15 +102,12 @@ public class SqsListeningService {
 
         LocalDateTime startTime = LocalDateTime.now();
 
-        //создание organizationId
         String organizationId = null;
 
-        //создаем объект с котрым будем работать
         JobContext jobContext = new JobContext();
 
         jobContext.setStartTime(startTime);
 
-        //забыл для чего
         jobContext.setInboundQueueVisibility(inboundQueueVisibility);
         jobContext.setVisibility(visibility);
 
@@ -114,16 +116,12 @@ public class SqsListeningService {
         try {
 
             // get organizationId from message
-            // получаем сообщение из параметров метода
             ConnectorMessage message = objectMapper.readValue(messageJson, ConnectorMessage.class);
 
-            // из сообщения берем OrganizationId
             organizationId = message.getOrganizationId();
 
-            // сетим jobContext OrganizationId
             jobContext.setOrganizationId(organizationId);
 
-            //забыл для чего
             scheduledTasks.initDataToIncreaseMessageVisibility(organizationId, jobContext);
 
             log.info("OrganizationId: {}. Processing message at UTC: {}. Message created on: {}",
@@ -131,51 +129,40 @@ public class SqsListeningService {
 
             // setup for this run
             log.info("OrganizationId: {}. Authentication in safelyAPI and loading organization data.", organizationId);
-            //получили и засетили токен для jobContext
             loadSafelyAuthService.execute(jobContext, apiUsername, apiPassword);
-            //получили и засетили организацию для jobContext по токену(через jobContext) и id организации
             loadOrganizationService.execute(jobContext, organizationId);
 
             // load previous data
             log.info("OrganizationId: {}. Preparing to load property data from Safely.", organizationId);
-            //получили и засетили недвижимость в jobContext в формате Safely из MONGO
             loadPropertiesFromSafelyService.execute(jobContext);
             log.info("OrganizationId: {}. Preparing to load reservation data from Safely.", organizationId);
-            //получили и засетили бронь в jobContext в формате Safely из MONGO
             loadReservationsFromSafelyService.execute(jobContext);
 
             // load data from the PMS API
+            loadPmsAuthTokenService.execute(jobContext);
             log.info("OrganizationId: {}. Preparing to load property data from PMS.", organizationId);
-            //получили PMS property засетили в jobContext
             loadPmsPropertiesService.execute(jobContext);
             log.info("OrganizationId: {}. Preparing to load reservation data from PMS.", organizationId);
-            //получили PMS reservations засетили в jobContext
             loadPmsReservationsService.execute(jobContext);
 
 
             // convert PMS data to Safely format
             log.info("OrganizationId: {}. Preparing to convert PMS properties to Safely structure", organizationId);
-            // конвертируем  PMS property в Safely property
             convertPmsPropertiesToSafelyService.execute(jobContext);
             log.info("OrganizationId: {}. Preparing to convert PMS reservations to Safely structure", organizationId);
-            // конвертируем  PMS reservations в Safely reservations
             convertPmsReservationsToSafelyService.execute(jobContext);
 
 
             // compare previous data to new data for changes
             log.info("OrganizationId: {}. Preparing to compute properties change list", organizationId);
-            //сравнивание конвертированные проперти со старыми данными, добавляем новые,обновляем старые, те что не были в новом списке статус inactive
             computePropertiesChangeListService.execute(jobContext);
             log.info("OrganizationId: {}. Preparing to compute reservations change list", organizationId);
-            //сравнивание конвертированные брони со старыми данными, добавляем новые,обновляем старые
             computeReservationsChangeListService.execute(jobContext);
 
             // save any changes
             log.info("OrganizationId: {}. Preparing to save properties to Safely", organizationId);
-            //создали новые проперти, обновили старые проперти
             savePropertiesToSafelyService.execute(jobContext);
             log.info("OrganizationId: {}. Preparing to save reservations to Safely", organizationId);
-            //создали новые брони, обновили старые брони
             saveReservationsToSafelyService.execute(jobContext);
 
 
