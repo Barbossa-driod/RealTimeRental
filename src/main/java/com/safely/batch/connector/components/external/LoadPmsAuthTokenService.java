@@ -23,7 +23,7 @@ public class LoadPmsAuthTokenService {
             log.info("OrganizationId: {}. Retrieving Pms Token from RealTimeRental.", jobContext.getOrganizationId());
 
             String username = jobContext.getOrganization().getOrganizationSourceCredentials().getAccountKey();
-            String password = jobContext.getOrganization().getOrganizationSourceCredentials().getAccountPassword();
+            String password = jobContext.getOrganization().getOrganizationSourceCredentials().getAccountPrivateKey();
 
             AuthenticationResponseToken token = authorizationClient.getPmsToken(username, password);
 
