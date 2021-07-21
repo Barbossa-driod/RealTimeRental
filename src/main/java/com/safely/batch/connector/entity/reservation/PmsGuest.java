@@ -25,4 +25,6 @@ public class PmsGuest {
     @JsonProperty("MobilePhone")
     private String mobilePhone;
 
+    @JsonProperty("HomePhone")
+    private String homePhone;
 }

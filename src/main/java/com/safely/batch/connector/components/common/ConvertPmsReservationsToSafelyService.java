@@ -14,10 +14,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -31,20 +28,20 @@ public class ConvertPmsReservationsToSafelyService {
     private static final String FAILED_IDS = "failed_ids";
     private static final String STEP_NAME = "convert_pms_reservations_to_safely";
 
-    private static final String ACTIVE = "Active";
-    private static final String CANCELLED = "Canceled";
-    private static final String APPROVED = "Approved";
-    private static final String EXECUTED = "Executed";
-    private static final String CHECKED_IN = "Checked In";
-    private static final String FAIL = "Fail";
-    private static final String FINAL = "Final";
-    private static final String NEW = "New";
-    private static final String NON_PARTICIPATING_RESERVATION = "Non Participating Reservation";
-    private static final String OWNER_SIGNED = "Owner Signed";
-    private static final String OWNER_RESERVATION = "Owner Reservation";
-    private static final String PASS = "Pass";
-    private static final String TENANT_SIGNED = "Tenant Signed";
-    private static final String UNKNOWN = "Unknown";
+    private static final String ACTIVE = "active";
+    private static final String CANCELLED = "canceled";
+    private static final String APPROVED = "approved";
+    private static final String EXECUTED = "executed";
+    private static final String CHECKED_IN = "checked in";
+    private static final String FAIL = "fail";
+    private static final String FINAL = "final";
+    private static final String NEW = "new";
+    private static final String NON_PARTICIPATING_RESERVATION = "non participating reservation";
+    private static final String OWNER_SIGNED = "owner signed";
+    private static final String OWNER_RESERVATION = "owner reservation";
+    private static final String PASS = "pass";
+    private static final String TENANT_SIGNED = "tenant signed";
+    private static final String UNKNOWN = "unknown";
 
     public void execute(JobContext jobContext) {
 
@@ -179,12 +176,23 @@ public class ConvertPmsReservationsToSafelyService {
         List<GuestPhone> guestPhones = new ArrayList<>();
 
         if (pmsGuest.getMobilePhone() != null && !pmsGuest.getMobilePhone().isEmpty()) {
-            GuestPhone guestPhone = new GuestPhone();
-            guestPhone.setNumber(pmsGuest.getMobilePhone());
-            guestPhone.setType(PhoneType.PERSONAL);
-            guestPhone.setPrimary(Boolean.TRUE);
-            guestPhones.add(guestPhone);
+            GuestPhone guestMobilePhone = new GuestPhone();
+            guestMobilePhone.setNumber(pmsGuest.getMobilePhone());
+            guestMobilePhone.setType(PhoneType.PERSONAL);
+            guestMobilePhone.setPrimary(Boolean.TRUE);
+
+            guestPhones.add(guestMobilePhone);
         }
+
+        if (pmsGuest.getHomePhone() != null && !pmsGuest.getHomePhone().isEmpty()){
+            GuestPhone guestHomePhone = new GuestPhone();
+            guestHomePhone.setNumber(pmsGuest.getHomePhone());
+            guestHomePhone.setType(PhoneType.HOME);
+            guestHomePhone.setPrimary(Boolean.TRUE);
+
+            guestPhones.add(guestHomePhone);
+        }
+
         guest.setGuestPhones(guestPhones);
     }
 
@@ -242,7 +250,7 @@ public class ConvertPmsReservationsToSafelyService {
 
     private ReservationStatus getReservationStatus(PmsReservation pmsReservation) {
 
-        switch (pmsReservation.getStatus()) {
+        switch (pmsReservation.getStatus().toLowerCase()) {
             case FAIL:
             case CANCELLED:
             case UNKNOWN:
