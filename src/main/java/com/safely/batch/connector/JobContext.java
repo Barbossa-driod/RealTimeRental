@@ -87,6 +87,7 @@ public class JobContext {
         int maxAllowedSecondsToAdd = maxSeconds - secondsLeftInVisibility;
         int finalSecondsToAdd = Math.max(Math.min(maxAllowedSecondsToAdd, additionalSeconds), 0);
         log.info("OrganizationId: {}. Message visibility timeout refresh. Current Length of Job: {} Seconds Left in Visibility: {}, Seconds to Add: {} Final Seconds to Add: {}", organizationId, lengthOfJobInSeconds, secondsLeftInVisibility, additionalSeconds, finalSecondsToAdd);
+
         if (finalSecondsToAdd > secondsLeftInVisibility) {
             visibility.extend(finalSecondsToAdd).get();
             inboundQueueVisibility += finalSecondsToAdd;
