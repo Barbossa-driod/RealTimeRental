@@ -34,15 +34,12 @@ public class SavePropertiesToSafelyService {
 
         Map<String, Object> stepStatistics = new HashMap<>();
 
-
         Organization organization = jobContext.getOrganization();
 
         JWTToken token = jobContext.getSafelyToken();
 
-        //новые проперти, которые добавили
         List<Property> newProperties = jobContext.getNewProperties();
 
-        // id если были траблы
         List<String> failedIds = new ArrayList<>();
 
         log.info("OrganizationId: {}. Writing {} new properties for organization with name: {}",
@@ -50,10 +47,8 @@ public class SavePropertiesToSafelyService {
 
         int successfullyCreated = 0;
 
-        // создали новые
         for (Property property : newProperties) {
             try {
-                //создание по токену и проперти
                 propertiesService.create(token.getIdToken(), property);
                 successfullyCreated++;
             } catch (Exception e) {
@@ -63,13 +58,11 @@ public class SavePropertiesToSafelyService {
             }
         }
 
-        //старые обновленные
         List<Property> updatedProperties = jobContext.getUpdatedProperties();
         int updatedSuccessfully = 0;
         log.info("OrganizationId: {}. Writing {} updated properties for organization with name: {}",
                 organization.getEntityId(), updatedProperties.size(), organization.getName());
 
-        //сохранили обновленные старые
         for (Property property : updatedProperties) {
             try {
                 propertiesService.save(token.getIdToken(), property);

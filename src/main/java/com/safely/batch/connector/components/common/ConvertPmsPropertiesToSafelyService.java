@@ -80,7 +80,11 @@ public class ConvertPmsPropertiesToSafelyService {
         safelyProperty.setReferenceId(String.valueOf(pmsProperty.getId()));
 
         // TODO: 15.07.2021 Wait Steve's response about it
-        safelyProperty.setName(pmsProperty.getPropertyName());
+        if (pmsProperty.getPropertyName() == null){
+            safelyProperty.setName(pmsProperty.getOwnerName());
+        }else {
+            safelyProperty.setName(pmsProperty.getPropertyName());
+        }
 
         //Address
         safelyProperty.setStreetLine1(pmsProperty.getStreet());
