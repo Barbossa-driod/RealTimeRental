@@ -79,9 +79,9 @@ public class ConvertPmsPropertiesToSafelyService {
         //Property
         safelyProperty.setReferenceId(String.valueOf(pmsProperty.getId()));
 
-        // TODO: 15.07.2021 Wait Steve's response about it
+        //PropertyName
         if (pmsProperty.getPropertyName() == null){
-            safelyProperty.setName(pmsProperty.getOwnerName());
+            safelyProperty.setName(pmsProperty.getStreet());
         }else {
             safelyProperty.setName(pmsProperty.getPropertyName());
         }

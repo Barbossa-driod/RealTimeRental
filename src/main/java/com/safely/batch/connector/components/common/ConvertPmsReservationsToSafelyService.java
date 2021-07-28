@@ -29,7 +29,8 @@ public class ConvertPmsReservationsToSafelyService {
     private static final String STEP_NAME = "convert_pms_reservations_to_safely";
 
     private static final String ACTIVE = "active";
-    private static final String CANCELLED = "canceled";
+    private static final String CANCELED = "canceled";
+    private static final String CANCELLED = "cancelled";
     private static final String APPROVED = "approved";
     private static final String EXECUTED = "executed";
     private static final String CHECKED_IN = "checked in";
@@ -253,6 +254,7 @@ public class ConvertPmsReservationsToSafelyService {
         switch (pmsReservation.getStatus().toLowerCase()) {
             case FAIL:
             case CANCELLED:
+            case CANCELED:
             case UNKNOWN:
             case NON_PARTICIPATING_RESERVATION:
                 return ReservationStatus.CANCELLED;
