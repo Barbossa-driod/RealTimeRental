@@ -7,7 +7,6 @@ import org.springframework.cloud.aws.autoconfigure.context.ContextResourceLoader
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication(exclude = {ContextResourceLoaderAutoConfiguration.class, ContextInstanceDataAutoConfiguration.class})
-@EnableScheduling
 public class Application {
 
   public static void main(String[] args) {
